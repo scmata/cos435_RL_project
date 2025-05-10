@@ -1,0 +1,26 @@
+name: env-RL
+channels:
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - scikit-learn
+  - matplotlib-base=3.9.2=py310h68603db_1
+  - pandas=2.2.3=py310h5eaa309_1
+  - pillow=10.3.0=py310hf73ecf8_0
+  - pip=24.3.1=pyh8b19718_0
+  - pyvirtualdisplay
+  - swig
+  - pip:
+      - numpy==1.23
+      - gym==0.25.0
+      - box2d-py
+      - box2d
+      - dm-control
+      - mujoco
+      - imageio
+      - glfw
+      - ipython               # needed for IPython.display
+      - dm-env                # used by dm_control
+      - torch
+prefix: /home/sm5607/.conda/envs/
