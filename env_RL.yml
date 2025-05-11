@@ -23,4 +23,6 @@ dependencies:
       - ipython               # needed for IPython.display
       - dm-env                # used by dm_control
       - torch
+      - mujoco_py
+      - cython==0.29.36
 prefix: /home/sm5607/.conda/envs/

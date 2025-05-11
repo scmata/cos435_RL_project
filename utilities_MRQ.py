@@ -6,14 +6,16 @@ from collections.abc import Callable
 
 import numpy as np
 import torch
-from dm_control import suite
-from dm_env import specs
+
 import gym
 import random
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
-from utilities_DMC import flatten_obs
+
+#from dm_control import suite
+#from dm_env import specs
+#from utilities_DMC import flatten_obs
 
 
 def ln_activ(x: torch.Tensor, activ: Callable):

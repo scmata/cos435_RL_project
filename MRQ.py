@@ -17,11 +17,11 @@ from typing import Tuple
 from collections.abc import Callable
 from collections import deque
 
-from dm_control import suite
-from dm_env import specs
+#from dm_control import suite
+#from dm_env import specs
 from gym import spaces
 import pandas as pd
-from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
+#from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
 
 from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym
 import argparse
@@ -37,6 +37,8 @@ env_type= "DMC" #either DMC or gym
 #    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 
 
 DMC_TASKS = [
+   'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
+    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 
     'dog/run', 'dog/stand', 'dog/trot',
     'dog/walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
     'hopper/stand', 'humanoid/run', 'humanoid/stand', 'humanoid/walk', 'pendulum/swingup',
@@ -44,6 +46,10 @@ DMC_TASKS = [
     'walker/run', 'walker/stand', 'walker/walk'
 ]
 
+
+GYM_TASKS = [
+     'Ant-v4', 'HalfCheetah-v4', 'Hopper-v4', 'humanoid-v4', 'Walker2d-v4'
+]
 
 
 
@@ -382,8 +388,8 @@ if not os.path.exists("results"):
     os.makedirs("results")
 
 
-env_type = "DMC" #either DMC or gym
-for task in DMC_TASKS:
+env_type = "gym" #either DMC or gym
+for task in GYM_TASKS:
     env_name = task
     print(f"Running MRQ on {env_name}")
     evaluations_MRQ = main(policy_name='MRQ', _env_name=env_name)
@@ -397,7 +403,7 @@ for task in DMC_TASKS:
     plt.xlabel('Episode Num')
     plt.ylabel('Reward')
     plt.title(f"MRQ {safe_env_name} Reward Plot")
-    plt.savefig(f"plots/reward_plot_{safe_env_name}_MRQ_A.png")
+    plt.savefig(f"plots/reward_plot_{safe_env_name}_{env_type}_MRQ_B.png")
     plt.close()
 
     # Save evaluations to a DataFrame and then to CSV
@@ -405,7 +411,7 @@ for task in DMC_TASKS:
         "Episode": range(1, len(evaluations_MRQ) + 1),
         "Reward": evaluations_MRQ
     })
-    df.to_csv(f"results/{safe_env_name}_evaluations_MRQ_A.csv", index=False)
+    df.to_csv(f"results/{safe_env_name}_{env_type}_evaluations_MRQ_B.csv", index=False)
 
 
 '''
