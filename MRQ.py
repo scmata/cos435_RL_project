@@ -23,15 +23,20 @@ from gym import spaces
 import pandas as pd
 from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
 
-from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym
+from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym, StochasticPolicyNetwork
 import argparse
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print(f" Current numpy version: {np.__version__}, gym version: {gym.__version__}")
-env_name='cartpole/swingup'
-env_type= "DMC" #either DMC or gym
+#env_name='cartpole/swingup'
+#env_type= "DMC" #either DMC or gym
 
+env_name='BipedalWalker-v3'
+env_type= "gym" #either DMC or gym
+
+
+#
 
 #'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
 #    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 
@@ -47,11 +52,13 @@ DMC_TASKS = [
 
 
 
+
+
 #env_name = 'BipedalWalker-v3'
 #env_type = "gym" #either DMC or gym
 
 class MRQ_agent(object):
-  def __init__(self, state_dim: int, action_dim: int, max_action: float, discount: float=0.99):
+  def __init__(self, state_dim: int, action_dim: int, max_action: float, discount: float=0.99,exploration: str='Standard'):
     # env settings
     self.state_dim = state_dim
     self.action_dim = action_dim
@@ -84,6 +91,8 @@ class MRQ_agent(object):
     self.za_dim = 256
     self.zsa_dim = 512
     self.enc_horizon = 5
+
+    self.alpha = 0.1
 
     # State Encoder
     self.encoder = Encoder(state_dim, action_dim).to(device)
@@ -137,7 +146,7 @@ class MRQ_agent(object):
       term_discount *= self.discount * not_done[:,i]
 
     # optimise QNetwork
-    self.reward_scale = replay_buffer.reward_scale()
+    #self.reward_scale = replay_buffer.reward_scale()
     Q, Q_tgt = self.train_Q(state, action, next_state, ms_reward,
                             term_discount, self.reward_scale, self.target_reward_scale)
 
@@ -147,7 +156,7 @@ class MRQ_agent(object):
       self.Q1_target.load_state_dict(self.Q.state_dict())
       self.Q2_target.load_state_dict(self.Q.state_dict())
       self.encoder_target.load_state_dict(self.encoder.state_dict())
-      self.target_reward_scale = replay_buffer.reward_scale()
+      #self.target_reward_scale = replay_buffer.reward_scale()
       # TODO: reward scale update
 
       for _ in range(self.encoder_steps):
@@ -232,8 +241,8 @@ def init_flags():
   flags = {
         "env": env_name,
         "seed":0 ,
-        "start_timesteps": 1e3, #needs to be 100k at some point
-        "max_timesteps": 8e3,
+        "start_timesteps": 1e4, #needs to be 100k at some point
+        "max_timesteps": 8e4,
         "expl_noise": 0.1,
         "batch_size": 256,
         "discount":0.99,
@@ -247,11 +256,11 @@ def init_flags():
 
 
 
-def plot_exploration(actions, states, start_timesteps, max_timesteps):
+def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration_type='Standard'):
     timesteps = range(len(actions))
     
     # Create a figure with 2 subplots (one for actions, one for states)
-    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+    fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
     # --- Plot Actions ---
     axs[0].plot(timesteps, actions, label='Action value', alpha=0.7)
@@ -263,12 +272,31 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps):
     axs[0].grid(True)
     axs[0].set_xlim([0, max_timesteps])
 
-    # --- Plot States ---
-    # Using the first component of the state vector (state[0]) as x-axis
-    # and the second component (state[1]) as y-axis for 2D state visualization
-    axs[1].scatter([s[0] for s in states], [s[1] for s in states], label='State trajectory', alpha=0.7)
-    axs[1].axvline(x=states[start_timesteps][0], color='red', linestyle='--', label='End of Random Exploration (State)')
+    # --- Plot States Before 1000 Timesteps ---
+    scatter_before = axs[1].scatter(
+        [s[0] for i, s in enumerate(states) if i < start_timesteps], 
+        [s[1] for i, s in enumerate(states) if i < start_timesteps], 
+        c=[i for i in timesteps if i < start_timesteps], 
+        cmap='Blues', 
+        label='State trajectory (Before 1000)', 
+        alpha=0.7
+    )
+    cbar_before = plt.colorbar(scatter_before, ax=axs[1])
+    cbar_before.set_label('Timestep (Before 1000)')
+    
+    # --- Plot States After 1000 Timesteps ---
+    scatter_after = axs[1].scatter(
+        [s[0] for i, s in enumerate(states) if i >= start_timesteps], 
+        [s[1] for i, s in enumerate(states) if i >= start_timesteps], 
+        c=[i for i in timesteps if i >= start_timesteps], 
+        cmap='Oranges', 
+        label='State trajectory (After 1000)', 
+        alpha=0.7
+    )
+    cbar_after = plt.colorbar(scatter_after, ax=axs[1])
+    cbar_after.set_label('Timestep (After 1000)')
 
+    axs[1].axvline(x=states[int(start_timesteps)][0], color='red', linestyle='--', label='End of Random Exploration (State)')
     axs[1].set_title('State Exploration Over Time (2D State Plot)')
     axs[1].set_xlabel('State Dimension 1 (e.g., state[0])')
     axs[1].set_ylabel('State Dimension 2 (e.g., state[1])')
@@ -277,16 +305,26 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps):
     axs[1].set_xlim([min(s[0] for s in states), max(s[0] for s in states)])
     axs[1].set_ylim([min(s[1] for s in states), max(s[1] for s in states)])
 
+    # --- Plot State[0] Over Time ---
+    axs[2].plot(timesteps, [s[0] for s in states], label='State[0] over time', color='orange', alpha=0.7)
+    axs[2].set_title('State[0] Over Time')
+    axs[2].set_xlabel('Timestep')
+    axs[2].set_ylabel('State[0] Value')
+    axs[2].legend()
+    axs[2].grid(True)
+    axs[2].set_xlim([0, max_timesteps])
+
+
     # Show the plots
     plt.tight_layout()
-    plt.savefig(f"plots/reward_plot_MountainCarContinuous_MRQ.png")
+    plt.savefig(f"plots/reward_plot_MountainCarContinuous_MRQ_{exploration_type}_SA.png")
     plt.close()
 
 
 
 
 
-def main(policy_name='MRQ',_env_name=env_name, exploration: str, 'Standard'):
+def main(policy_name='MRQ',_env_name=env_name, exploration='Standard'):
 
     # Parse command-line arguments
     #parser = argparse.ArgumentParser(description="MRQ Agent Training")
@@ -416,8 +454,6 @@ def main(policy_name='MRQ',_env_name=env_name, exploration: str, 'Standard'):
         if done:
             print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
             evaluations.append(episode_reward)
-            if args["env"] == "MountainCarContinuous":
-                plot_exploration(visited_actions, visited_states, args["start_timesteps"], args["max_timesteps"])
             # Reset environment
             if env_type == "DMC":
                 time_step = env.reset()
@@ -429,6 +465,12 @@ def main(policy_name='MRQ',_env_name=env_name, exploration: str, 'Standard'):
             episode_timesteps = 0
             episode_num += 1
 
+    # goal is x > 0.45
+    # 
+
+
+    if args["env"] == "MountainCarContinuous":
+        plot_exploration(visited_actions, visited_states, args["start_timesteps"], args["max_timesteps"],exploration_type=exploration)
     return evaluations
 
 
@@ -440,6 +482,7 @@ if not os.path.exists("results"):
     os.makedirs("results")
 
 
+'''
 env_type = "DMC" #either DMC or gym
 for task in DMC_TASKS:
     env_name = task
@@ -467,7 +510,14 @@ for task in DMC_TASKS:
 
 
 '''
-evaluations_MRQ = main(policy_name = 'MRQ')
+exploration_type="Standard"
+
+
+print(f"Running MRQ on {env_name} with env type {env_type} with exploration type {exploration_type} ")
+
+
+
+evaluations_MRQ = main(policy_name = 'MRQ', _env_name=env_name, exploration=exploration_type)
 # Replace "/" with "_" in the environment name for safe file indexing
 safe_env_name = env_name.replace("/", "_")
 
@@ -475,7 +525,7 @@ plt.plot(evaluations_MRQ)
 plt.xlabel('Episode Num')
 plt.ylabel('reward')
 plt.title(f"MRQ {safe_env_name} reward plot")
-plt.savefig(f"plots/reward_plot_{safe_env_name}MRQ.png")
+plt.savefig(f"plots/reward_plot_{safe_env_name}_{env_type}_explore{exploration_type}_MRQ_FinalABC_no_rewardScale.png")
 
 # Save evaluations to a DataFrame and then to CSV
 
@@ -486,6 +536,5 @@ df = pd.DataFrame({
 })
 
 # Save the DataFrame to a CSV file
-df.to_csv(f"results/{env_name.replace('/', '_')}_evaluationsMRQ.csv", index=False)
+df.to_csv(f"results/{safe_env_name}_{env_type}_explore{exploration_type}_evaluationsMRQ_Final_noRewardScale.csv", index=False)
 
-'''

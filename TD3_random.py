@@ -331,7 +331,7 @@ class RandomPolicy(object):
 		pass
      
 
-
+'''
 evaluations_random = main(policy_name = 'RandomPolicy') #either TD3 or RandomPolicy
 evaluations_td3 = main(policy_name = 'TD3') #either TD3 or RandomPolicy
 
@@ -358,3 +358,30 @@ df = pd.DataFrame({
 
 # Save the DataFrame to a CSV file
 df.to_csv(f"results/{env_name.replace('/', '_')}_evaluationsTD3.csv", index=False)
+'''
+
+
+env_type = "gym" #either DMC or gym
+for task in GYM_TASKS:
+    env_name = task
+    print(f"Running MRQ on {env_name}")
+    evaluations_MRQ = main(policy_name='TD3', _env_name=env_name)
+
+    # Replace "/" with "_" in the environment name for safe file indexing
+    safe_env_name = env_name.replace("/", "_")
+
+    # Plot and save the reward plot
+    plt.figure()
+    plt.plot(evaluations_MRQ)
+    plt.xlabel('Episode Num')
+    plt.ylabel('Reward')
+    plt.title(f"MRQ {safe_env_name} Reward Plot")
+    plt.savefig(f"plots/reward_plot_{safe_env_name}_MRQ_A.png")
+    plt.close()
+
+    # Save evaluations to a DataFrame and then to CSV
+    df = pd.DataFrame({
+        "Episode": range(1, len(evaluations_MRQ) + 1),
+        "Reward": evaluations_MRQ
+    })
+    df.to_csv(f"results/{safe_env_name}_evaluations_MRQ_A.csv", index=False)

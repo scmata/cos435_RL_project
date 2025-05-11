@@ -408,7 +408,7 @@ class StochasticPolicyNetwork(nn.Module):
     Final activation is a tanh function.
   """
   def __init__(self, zs_dim: int, action_dim: int):
-    super(PolicyNetwork, self).__init__()
+    super(StochasticPolicyNetwork, self).__init__()
 
     self.l1 = nn.Linear(zs_dim, 512)
     self.l2 = nn.Linear(512, 512)
