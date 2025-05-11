@@ -41,3 +41,6 @@ def make_dmc_env(domain_name, task_name, seed):
     env = suite.load(domain_name=domain_name, task_name=task_name, task_kwargs={"random": seed})
     spec = env.action_spec()
     return env, spec
+
+def flatten_obs(obs_dict):
+    return np.concatenate([v.ravel() for v in obs_dict.values()])

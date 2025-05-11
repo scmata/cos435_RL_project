@@ -17,5 +17,5 @@ module purge
 module load anaconda3/2024.2
 conda activate env-RL
 
-python TD3_random.py
+python MRQ.py
 

@@ -8,6 +8,8 @@ import random
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
+from utilities_DMC import flatten_obs
+
 
 class ReplayBuffer_TD3(object):
 	def __init__(self, state_dim, action_dim, max_size=int(1e6)):
@@ -46,8 +48,7 @@ class ReplayBuffer_TD3(object):
 			torch.FloatTensor(self.not_done[ind]).to(self.device)
 		)
 	
-def flatten_obs(obs_dict):
-    return np.concatenate([v.ravel() for v in obs_dict.values()])
+
 # policy evaluation with Monte Carlo
 def eval_policy_TD3_DMC(policy, env_name, seed, eval_episodes=10):
     domain, task = env_name.split("/")

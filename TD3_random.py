@@ -19,9 +19,11 @@ from dm_control import suite
 from dm_env import specs
 import matplotlib.pyplot as plt
 
-from utilities_DMC import DMCWrapper, make_dmc_env
-from utilities_TD3 import ReplayBuffer_TD3, flatten_obs,eval_policy_TD3_DMC,  eval_policy_TD3_gym, Actor_TD3, Critic_TD3
+from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
+from utilities_TD3 import ReplayBuffer_TD3,eval_policy_TD3_DMC,  eval_policy_TD3_gym, Actor_TD3, Critic_TD3
 import os
+import csv
+import pandas as pd
 
 
 
@@ -43,6 +45,9 @@ DMC_TASKS = [
     'walker/run', 'walker/stand', 'walker/walk'
 ]
 
+GYM_TASKS = [
+     'Ant-v3', 'HalfCheetah-v3', 'Hopper-v3', 'humanoid-v2', 'Walker2d-v3'
+]
 
 
 def init_flags():
@@ -331,7 +336,22 @@ evaluations_td3 = main(policy_name = 'TD3') #either TD3 or RandomPolicy
 if not os.path.exists("plots"):
     os.makedirs("plots")
 
+if not os.path.exists("results"):
+    os.makedirs("results")
+
+
 plt.plot(evaluations_td3)
 plt.xlabel('Episode Num')
 plt.ylabel('reward')
 plt.savefig("plots/reward_plot.png")
+
+# Save evaluations to a DataFrame and then to CSV
+
+# Create a DataFrame from the evaluations
+df = pd.DataFrame({
+    "Episode": range(1, len(evaluations_td3) + 1),
+    "Reward": evaluations_td3
+})
+
+# Save the DataFrame to a CSV file
+df.to_csv(f"results/{env_name.replace('/', '_')}_evaluationsTD3.csv", index=False)
