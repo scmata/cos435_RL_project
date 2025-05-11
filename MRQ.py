@@ -32,6 +32,21 @@ print(f" Current numpy version: {np.__version__}, gym version: {gym.__version__}
 env_name='cartpole/swingup'
 env_type= "DMC" #either DMC or gym
 
+
+#'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
+#    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 
+
+DMC_TASKS = [
+    'dog/run', 'dog/stand', 'dog/trot',
+    'dog/walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
+    'hopper/stand', 'humanoid/run', 'humanoid/stand', 'humanoid/walk', 'pendulum/swingup',
+    'quadruped/run', 'quadruped/walk', 'reacher/easy', 'reacher/hard',
+    'walker/run', 'walker/stand', 'walker/walk'
+]
+
+
+
+
 #env_name = 'BipedalWalker-v3'
 #env_type = "gym" #either DMC or gym
 
@@ -218,21 +233,21 @@ def init_flags():
 
 
 # The following main() function is provided to you. It can a run for both DDPG and TD3..
-def main(policy_name='MRQ'):
+def main(policy_name='MRQ',_env_name=env_name):
 
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="MRQ Agent Training")
-    parser.add_argument("--env_type", type=str, choices=["DMC", "gym"], required=True, help="Environment type: 'DMC' or 'gym'")
-    parser.add_argument("--env_name", type=str, required=True,default="cartpole/swingup", help="Environment name (e.g., 'cartpole/swingup')")
-    args = parser.parse_args()
+    #parser = argparse.ArgumentParser(description="MRQ Agent Training")
+    #parser.add_argument("--env_type", type=str, choices=["DMC", "gym"], required=True, help="Environment type: 'DMC' or 'gym'")
+    #parser.add_argument("--env_name", type=str, required=True,default="cartpole/swingup", help="Environment name (e.g., 'cartpole/swingup')")
+    #args = parser.parse_args()
 
     # Update the env_name variable with the parsed argument
-    env_name = args.env_name
+    #env_name = args.env_name
 
     args = init_flags()
 
     if env_type == "DMC":
-        domain, task = args["env"].split("/")
+        domain, task = _env_name.split("/")
         env, action_spec = make_dmc_env(domain, task, args["seed"])
 
         # Set seeds
@@ -252,7 +267,7 @@ def main(policy_name='MRQ'):
         state_dim_vec = state.shape
 
     elif env_type == "gym":
-        env = gym.make(args["env"])
+        env = gym.make(_env_name)
         env.seed(args["seed"] + 100)
         env.action_space.seed(args["seed"])
         torch.manual_seed(args["seed"])
@@ -275,9 +290,9 @@ def main(policy_name='MRQ'):
         replay_buffer = ReplayBuffer_MRQ(state_dim_vec, action_dim, max_action= max_action, pixel_obs= False, device= device)
         
         if env_type == "DMC":
-            evaluations = [eval_policy_MRQ_DMC(policy, args["env"], args["seed"])]
+            evaluations = [eval_policy_MRQ_DMC(policy, _env_name, args["seed"])]
         elif env_type == "gym":
-            evaluations = [eval_policy_MRQ_gym(policy, args["env"], args["seed"])]
+            evaluations = [eval_policy_MRQ_gym(policy, _env_name, args["seed"])]
             state, done = env.reset(), False
            
 
@@ -357,11 +372,6 @@ def main(policy_name='MRQ'):
     return evaluations
 
 
-
-
-evaluations_MRQ = main(policy_name = 'MRQ')
-
-
 # Create the plots directory if it doesn't exist
 if not os.path.exists("plots"):
     os.makedirs("plots")
@@ -370,6 +380,34 @@ if not os.path.exists("results"):
     os.makedirs("results")
 
 
+env_type = "DMC" #either DMC or gym
+for task in DMC_TASKS:
+    env_name = task
+    print(f"Running MRQ on {env_name}")
+    evaluations_MRQ = main(policy_name='MRQ', _env_name=env_name)
+
+    # Replace "/" with "_" in the environment name for safe file indexing
+    safe_env_name = env_name.replace("/", "_")
+
+    # Plot and save the reward plot
+    plt.figure()
+    plt.plot(evaluations_MRQ)
+    plt.xlabel('Episode Num')
+    plt.ylabel('Reward')
+    plt.title(f"MRQ {safe_env_name} Reward Plot")
+    plt.savefig(f"plots/reward_plot_{safe_env_name}_MRQ_A.png")
+    plt.close()
+
+    # Save evaluations to a DataFrame and then to CSV
+    df = pd.DataFrame({
+        "Episode": range(1, len(evaluations_MRQ) + 1),
+        "Reward": evaluations_MRQ
+    })
+    df.to_csv(f"results/{safe_env_name}_evaluations_MRQ_A.csv", index=False)
+
+
+'''
+evaluations_MRQ = main(policy_name = 'MRQ')
 # Replace "/" with "_" in the environment name for safe file indexing
 safe_env_name = env_name.replace("/", "_")
 
@@ -390,4 +428,4 @@ df = pd.DataFrame({
 # Save the DataFrame to a CSV file
 df.to_csv(f"results/{env_name.replace('/', '_')}_evaluationsMRQ.csv", index=False)
 
-
+'''
