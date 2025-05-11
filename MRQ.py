@@ -232,8 +232,8 @@ def init_flags():
   flags = {
         "env": env_name,
         "seed":0 ,
-        "start_timesteps": 1e4, #needs to be 100k at some point
-        "max_timesteps": 8e4,
+        "start_timesteps": 1e3, #needs to be 100k at some point
+        "max_timesteps": 8e3,
         "expl_noise": 0.1,
         "batch_size": 256,
         "discount":0.99,
