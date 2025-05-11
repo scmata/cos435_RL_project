@@ -51,7 +51,7 @@ DMC_TASKS = [
 #env_type = "gym" #either DMC or gym
 
 class MRQ_agent(object):
-  def __init__(self, state_dim: int, action_dim: int, max_action: float, discount: float=0.99, exploration: str, 'Standard'):
+  def __init__(self, state_dim: int, action_dim: int, max_action: float, discount: float=0.99):
     # env settings
     self.state_dim = state_dim
     self.action_dim = action_dim
@@ -247,9 +247,46 @@ def init_flags():
 
 
 
+def plot_exploration(actions, states, start_timesteps, max_timesteps):
+    timesteps = range(len(actions))
+    
+    # Create a figure with 2 subplots (one for actions, one for states)
+    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+
+    # --- Plot Actions ---
+    axs[0].plot(timesteps, actions, label='Action value', alpha=0.7)
+    axs[0].axvline(x=start_timesteps, color='red', linestyle='--', label='End of Random Exploration')
+    axs[0].set_title('Action Exploration Over Time')
+    axs[0].set_xlabel('Timestep')
+    axs[0].set_ylabel('Action Value')
+    axs[0].legend()
+    axs[0].grid(True)
+    axs[0].set_xlim([0, max_timesteps])
+
+    # --- Plot States ---
+    # Using the first component of the state vector (state[0]) as x-axis
+    # and the second component (state[1]) as y-axis for 2D state visualization
+    axs[1].scatter([s[0] for s in states], [s[1] for s in states], label='State trajectory', alpha=0.7)
+    axs[1].axvline(x=states[start_timesteps][0], color='red', linestyle='--', label='End of Random Exploration (State)')
+
+    axs[1].set_title('State Exploration Over Time (2D State Plot)')
+    axs[1].set_xlabel('State Dimension 1 (e.g., state[0])')
+    axs[1].set_ylabel('State Dimension 2 (e.g., state[1])')
+    axs[1].legend()
+    axs[1].grid(True)
+    axs[1].set_xlim([min(s[0] for s in states), max(s[0] for s in states)])
+    axs[1].set_ylim([min(s[1] for s in states), max(s[1] for s in states)])
+
+    # Show the plots
+    plt.tight_layout()
+    plt.savefig(f"plots/reward_plot_MountainCarContinuous_MRQ.png")
+    plt.close()
 
 
-def main(policy_name='MRQ',_env_name=env_name):
+
+
+
+def main(policy_name='MRQ',_env_name=env_name, exploration: str, 'Standard'):
 
     # Parse command-line arguments
     #parser = argparse.ArgumentParser(description="MRQ Agent Training")
@@ -261,6 +298,9 @@ def main(policy_name='MRQ',_env_name=env_name):
     #env_name = args.env_name
 
     args = init_flags()
+
+    visited_states = []
+    visited_actions = []
 
     if env_type == "DMC":
         domain, task = _env_name.split("/")
@@ -299,6 +339,7 @@ def main(policy_name='MRQ',_env_name=env_name):
         "action_dim": action_dim,
         "max_action": max_action,
         "discount": args["discount"],
+        "exploration": exploration
     }
 
     if policy_name == "MRQ":
@@ -360,6 +401,8 @@ def main(policy_name='MRQ',_env_name=env_name):
 
         # Store data in replay buffer
         if policy_name == "MRQ":
+            visited_states.append(state)
+            visited_actions.append(action)
             replay_buffer.add(state, action, next_state, reward, done_bool, truncated)
 
         state = next_state
@@ -373,7 +416,8 @@ def main(policy_name='MRQ',_env_name=env_name):
         if done:
             print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
             evaluations.append(episode_reward)
-
+            if args["env"] == "MountainCarContinuous":
+                plot_exploration(visited_actions, visited_states, args["start_timesteps"], args["max_timesteps"])
             # Reset environment
             if env_type == "DMC":
                 time_step = env.reset()
