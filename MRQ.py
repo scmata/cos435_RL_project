@@ -51,7 +51,7 @@ DMC_TASKS = [
 #env_type = "gym" #either DMC or gym
 
 class MRQ_agent(object):
-  def __init__(self, state_dim: int, action_dim: int, max_action: float, discount: float=0.99):
+  def __init__(self, state_dim: int, action_dim: int, max_action: float, discount: float=0.99, exploration: str, 'Standard'):
     # env settings
     self.state_dim = state_dim
     self.action_dim = action_dim
@@ -66,9 +66,8 @@ class MRQ_agent(object):
     self.noise_clip = 0.3
     self.use_exploration = True
     self.discount = discount
-    self.reward_scale = 1 #update
-    self.target_reward_scale = 1 #update
-    self.two_hot = TwoHot(device, -10, 10, 65)
+    self.reward_scale = 1
+    self.target_reward_scale = 1 
     self.value_grad_clip = 20
     self.pre_activ_weight = 1e-5
     self.encoder_steps = 250
@@ -76,6 +75,9 @@ class MRQ_agent(object):
     self.dyn_weight = 1
     self.reward_weight = 0.1
     self.done_weight = 0.1
+
+    #Exploration strategy to use
+    self.exploration = exploration
 
     # encoder setting
     self.zs_dim = 512
@@ -89,9 +91,14 @@ class MRQ_agent(object):
     self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), lr=3e-4)
 
     # Policy
-    self.policy = PolicyNetwork(self.zs_dim, action_dim).to(device)
-    self.policy_target = copy.deepcopy(self.policy)
-    self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
+    if self.exploration == 'Entropy':
+        self.policy = StochasticPolicyNetwork(self.zs_dim, action_dim).to(device)
+        self.policy_target = copy.deepcopy(self.policy)
+        self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
+    else:
+        self.policy = PolicyNetwork(self.zs_dim, action_dim).to(device)
+        self.policy_target = copy.deepcopy(self.policy)
+        self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
 
     # Value
     self.Q = QNetwork(self.zsa_dim).to(device)
@@ -99,7 +106,9 @@ class MRQ_agent(object):
     self.Q2_target = copy.deepcopy(self.Q)
     self.Q_optimizer = torch.optim.Adam(self.Q.parameters(), lr=3e-4)
 
-    self.TwoHot = TwoHot(device, -10, 10, 65)
+    self.TwoHot = TwoHot(device, -10, 10, 65) #65 discritized bins
+
+    
 
   def select_action_MRQ(self, state, use_exploration):
     with torch.no_grad():
@@ -149,7 +158,6 @@ class MRQ_agent(object):
   def train_encoder(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor,
                   reward: torch.Tensor, not_done: torch.Tensor, env_terminates: bool):
     with torch.no_grad():
-      #May need to re-shape next_state.reshape(-1,*self.state_shape)
       encoder_target = self.encoder.state(next_state)
 
     pred_zs = self.encoder.state(state[:,0])
@@ -185,7 +193,7 @@ class MRQ_agent(object):
 
       target_Q = torch.min(Q1_target_val, Q2_target_val)
 
-      #Need to think about
+      
       target_Q = (reward + term_discount * target_Q * target_reward_scale)/reward_scale
 
       zs = self.encoder.state(state)
@@ -196,14 +204,20 @@ class MRQ_agent(object):
 
     self.Q_optimizer.zero_grad(set_to_none=True)
     Q_loss.backward()
-    #Again need to think about also re-write
     torch.nn.utils.clip_grad_norm_(self.Q.parameters(), self.value_grad_clip)
     self.Q_optimizer.step()
 
-    action, pre_activation = self.policy(zs)
-    _, zsa = self.encoder.state_action(zs, action)
-    Q_policy = self.Q(zsa)
-    policy_loss = -Q_policy.mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
+    
+    if(self.exploration == 'Entropy'):
+        action, pre_activation, log_prob, _ = self.policy.sample(zs)
+        _, zsa = self.encoder.state_action(zs, action)
+        Q_policy = self.Q(zsa)
+        policy_loss = (self.alpha*log_prob-Q_policy).mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
+    else:
+        action, pre_activation = self.policy(zs)
+        _, zsa = self.encoder.state_action(zs, action)
+        Q_policy = self.Q(zsa)
+        policy_loss = -Q_policy.mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
 
     self.policy_optimizer.zero_grad(set_to_none=True)
     policy_loss.backward()
@@ -234,7 +248,7 @@ def init_flags():
 
 
 
-# The following main() function is provided to you. It can a run for both DDPG and TD3..
+
 def main(policy_name='MRQ',_env_name=env_name):
 
     # Parse command-line arguments

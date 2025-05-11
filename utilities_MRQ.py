@@ -17,6 +17,7 @@ from utilities_DMC import flatten_obs
 
 
 def ln_activ(x: torch.Tensor, activ: Callable):
+    #Referenced from MR.Q Github Repo
       x = F.layer_norm(x, (x.shape[-1],))
       return activ(x)
 
@@ -24,6 +25,7 @@ def ln_activ(x: torch.Tensor, activ: Callable):
 
 # We include some optimizations in this buffer to storing states multiple times when history or horizon > 1.
 class ReplayBuffer_MRQ:
+    #Referenced from MR.Q Github Repo
     def __init__(self, obs_shape: tuple[int, ...], action_dim: int, max_action: float, pixel_obs: bool,
         device: torch.device, history: int=1, horizon: int=1, max_size: int=1e6, batch_size: int=256,
         prioritized: bool=True, initial_priority: float=1, normalize_actions: bool=True):
@@ -277,6 +279,7 @@ def eval_policy_MRQ_DMC(policy, env_name, seed, eval_episodes=10):
     return avg_reward
 
 class TwoHot:
+    #Referenced from MR.Q Github Repo
     def __init__(self, device: torch.device, lower: float=-10, upper: float=10, num_bins: int=101):
         self.bins = torch.linspace(lower, upper, num_bins, device=device)
         self.bins = self.bins.sign() * (self.bins.abs().exp() - 1)
@@ -397,3 +400,50 @@ class PolicyNetwork(nn.Module):
     a = ln_activ(self.l1(zs), self.activ)
     pre_a = ln_activ(self.l2(a), self.activ)
     return torch.tanh(self.l3(pre_a)), pre_a
+
+class StochasticPolicyNetwork(nn.Module):
+  """
+    Policy network is a three layer MLP hidden dimension 512,
+    LayerNorm followed by ReLU activations after the first two layers.
+    Final activation is a tanh function.
+  """
+  def __init__(self, zs_dim: int, action_dim: int):
+    super(PolicyNetwork, self).__init__()
+
+    self.l1 = nn.Linear(zs_dim, 512)
+    self.l2 = nn.Linear(512, 512)
+    self.mean_layer = nn.Linear(512, action_dim)
+    self.log_std_layer = nn.Linear(512, action_dim)
+
+    self.LOG_STD_MIN = -5
+    self.LOG_STD_MAX = 2
+
+    self.activ = F.relu
+    self.std_bound = [-20, 2]
+
+  def forward(self, zs):
+    a = ln_activ(self.l1(zs), self.activ)
+    a = ln_activ(self.l2(a), self.activ)
+    mean = self.mean_layer(a)
+    log_std = self.log_std_layer(a)
+    log_std = torch.clamp(log_std, self.LOG_STD_MIN, self.LOG_STD_MAX)
+    return mean, log_std
+
+  def sample(self, zs):
+    mean, log_std = self.forward(zs)
+    std = log_std.exp()
+
+    normal = torch.distributions.Normal(mean, std)
+    x_t = normal.rsample()  # Sample with noise and track gradients
+    a_t = torch.tanh(x_t)
+
+    #Log-prob with correction Tanh correction (change of variables formula)
+    log_prob = normal.log_prob(x_t)
+    log_prob = log_prob - torch.log(1 - a_t.pow(2) + 1e-6)
+    log_prob = log_prob.sum(1, keepdim=True)
+
+    return a_t, x_t, log_prob, torch.tanh(mean)  # return also the mean action for eval mode
+
+  def action(self, zs):
+      mean, log_std = self.forward(zs)
+      return torch.tanh(mean)
