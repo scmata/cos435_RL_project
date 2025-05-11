@@ -128,6 +128,8 @@ class MRQ_agent(object):
       term_discount *= self.discount * not_done[:,i]
 
     # optimise QNetwork
+    self.reward_scale = replay_buffer.reward_scale()
+    self.target_reward_scale = self.reward_scale
     Q, Q_tgt = self.train_Q(state, action, next_state, ms_reward,
                             term_discount, self.reward_scale, self.target_reward_scale)
 
