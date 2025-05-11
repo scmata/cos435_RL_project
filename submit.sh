@@ -17,5 +17,8 @@ module purge
 module load anaconda3/2024.2
 conda activate env-RL
 
-python MRQ.py
+ENV_TYPE="gym"
+ENV_NAME="cartpole/swingup"
+
+python MRQ.py --env_type "$ENV_NAME" --env_name "$ENV_TYPE" 
 

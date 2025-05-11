@@ -24,6 +24,7 @@ import pandas as pd
 from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
 
 from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym
+import argparse
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -219,6 +220,15 @@ def init_flags():
 # The following main() function is provided to you. It can a run for both DDPG and TD3..
 def main(policy_name='MRQ'):
 
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="MRQ Agent Training")
+    parser.add_argument("--env_type", type=str, choices=["DMC", "gym"], required=True, help="Environment type: 'DMC' or 'gym'")
+    parser.add_argument("--env_name", type=str, required=True,default="cartpole/swingup", help="Environment name (e.g., 'cartpole/swingup')")
+    args = parser.parse_args()
+
+    # Update the env_name variable with the parsed argument
+    env_name = args.env_name
+
     args = init_flags()
 
     if env_type == "DMC":
@@ -367,7 +377,7 @@ plt.plot(evaluations_MRQ)
 plt.xlabel('Episode Num')
 plt.ylabel('reward')
 plt.title(f"MRQ {safe_env_name} reward plot")
-plt.savefig(f"plots/reward_plot_{safe_env_name}.png")
+plt.savefig(f"plots/reward_plot_{safe_env_name}MRQ.png")
 
 # Save evaluations to a DataFrame and then to CSV
 
