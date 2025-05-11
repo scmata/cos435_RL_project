@@ -23,7 +23,8 @@ from gym import spaces
 import pandas as pd
 from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
 
-from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym, StochasticPolicyNetwork
+# from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym, StochasticPolicyNetwork
+from utilities_MRQ import *
 import argparse
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -32,7 +33,7 @@ print(f" Current numpy version: {np.__version__}, gym version: {gym.__version__}
 #env_name='cartpole/swingup'
 #env_type= "DMC" #either DMC or gym
 
-env_name='BipedalWalker-v3'
+env_name='MountainCarContinuous'
 env_type= "gym" #either DMC or gym
 
 
@@ -110,10 +111,17 @@ class MRQ_agent(object):
         self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
 
     # Value
-    self.Q = QNetwork(self.zsa_dim).to(device)
-    self.Q1_target = copy.deepcopy(self.Q)
-    self.Q2_target = copy.deepcopy(self.Q)
-    self.Q_optimizer = torch.optim.Adam(self.Q.parameters(), lr=3e-4)
+    if self.exploration == 'Bootstrapping':
+        self.K = 5
+        self.Q = QEnsemble(self.zsa_dim, self.K).to(device)
+        self.Q1_target = copy.deepcopy(self.Q)
+        self.Q2_target = copy.deepcopy(self.Q)
+        self.Q_optimizers = [torch.optim.Adam(self.Q.heads[k].parameters(), lr=3e-4) for k in range(self.K)]
+    else:
+        self.Q = QNetwork(self.zsa_dim).to(device)
+        self.Q1_target = copy.deepcopy(self.Q)
+        self.Q2_target = copy.deepcopy(self.Q)
+        self.Q_optimizer = torch.optim.Adam(self.Q.parameters(), lr=3e-4)
 
     self.TwoHot = TwoHot(device, -10, 10, 65) #65 discritized bins
 
@@ -189,48 +197,82 @@ class MRQ_agent(object):
 
   def train_Q(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor,
                     reward: torch.Tensor, term_discount: torch.Tensor, reward_scale: float, target_reward_scale: float):
-    with torch.no_grad():
-      next_zs = self.encoder_target.state(next_state)
+    if self.exploration == 'Bootstrapping':
+        with torch.no_grad():
+            next_zs = self.encoder_target.state(next_state)
+            clipped_noise = (torch.randn_like(action)*self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
+            next_action = (self.policy_target.action(next_zs) + clipped_noise).clamp(-self.max_action, self.max_action)
+            _, next_zsa = self.encoder_target.state_action(next_zs, next_action)
+            zs = self.encoder.state(state)
+            _, zsa = self.encoder.state_action(zs, action)
 
-      clipped_noise = (torch.randn_like(action)*self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
-      next_action = (self.policy_target.action(next_zs) + clipped_noise).clamp(-self.max_action, self.max_action)
-
-      _, next_zsa = self.encoder_target.state_action(next_zs, next_action)
-
-      Q1_target_val = self.Q1_target(next_zsa)
-      Q2_target_val = self.Q2_target(next_zsa)
-
-      target_Q = torch.min(Q1_target_val, Q2_target_val)
-
-      
-      target_Q = (reward + term_discount * target_Q * target_reward_scale)/reward_scale
-
-      zs = self.encoder.state(state)
-      _, zsa = self.encoder.state_action(zs, action)
-
-    Q_val = self.Q(zsa)
-    Q_loss = F.smooth_l1_loss(Q_val, target_Q)
-
-    self.Q_optimizer.zero_grad(set_to_none=True)
-    Q_loss.backward()
-    torch.nn.utils.clip_grad_norm_(self.Q.parameters(), self.value_grad_clip)
-    self.Q_optimizer.step()
-
+        policy_losses = []
     
-    if(self.exploration == 'Entropy'):
-        action, pre_activation, log_prob, _ = self.policy.sample(zs)
-        _, zsa = self.encoder.state_action(zs, action)
-        Q_policy = self.Q(zsa)
-        policy_loss = (self.alpha*log_prob-Q_policy).mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
-    else:
-        action, pre_activation = self.policy(zs)
-        _, zsa = self.encoder.state_action(zs, action)
-        Q_policy = self.Q(zsa)
-        policy_loss = -Q_policy.mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
+        for k in range(self.K):
+            with torch.no_grad():
+                Q1_target_val = self.Q1_target.head(next_zsa, k)
+                Q2_target_val = self.Q2_target.head(next_zsa, k)
+                target_Q = torch.min(Q1_target_val, Q2_target_val)
+                target_Q = (reward + term_discount * target_Q * target_reward_scale)/reward_scale
 
-    self.policy_optimizer.zero_grad(set_to_none=True)
-    policy_loss.backward()
-    self.policy_optimizer.step()
+            Q_val = self.Q.head(zsa, k)
+            Q_loss = F.smooth_l1_loss(Q_val, target_Q)
+
+            self.Q_optimizers[k].zero_grad(set_to_none=True)
+            Q_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.Q.heads[k].parameters(), self.value_grad_clip)
+            self.Q_optimizers[k].step()
+
+            action_k, pre_activation_k = self.policy(zs)
+            _, zsa_k = self.encoder.state_action(zs, action_k)
+            Q_policy_k = self.Q.head(zsa_k, k)
+            policy_loss_k = -Q_policy_k.mean() + self.pre_activ_weight * pre_activation_k.pow(2).mean()
+            policy_losses.append(policy_loss_k)
+
+        mean_policy_loss = torch.stack(policy_losses).mean()
+        self.policy_optimizer.zero_grad(set_to_none=True)
+        mean_policy_loss.backward()
+        self.policy_optimizer.step()
+    else:
+        with torch.no_grad():
+            next_zs = self.encoder_target.state(next_state)
+
+            clipped_noise = (torch.randn_like(action)*self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
+            next_action = (self.policy_target.action(next_zs) + clipped_noise).clamp(-self.max_action, self.max_action)
+
+            _, next_zsa = self.encoder_target.state_action(next_zs, next_action)
+
+            Q1_target_val = self.Q1_target(next_zsa)
+            Q2_target_val = self.Q2_target(next_zsa)
+
+            target_Q = torch.min(Q1_target_val, Q2_target_val)
+            target_Q = (reward + term_discount * target_Q * target_reward_scale)/reward_scale
+
+            zs = self.encoder.state(state)
+            _, zsa = self.encoder.state_action(zs, action)
+
+        Q_val = self.Q(zsa)
+        Q_loss = F.smooth_l1_loss(Q_val, target_Q)
+
+        self.Q_optimizer.zero_grad(set_to_none=True)
+        Q_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.Q.parameters(), self.value_grad_clip)
+        self.Q_optimizer.step()
+
+        if(self.exploration == 'Entropy'):
+            action, pre_activation, log_prob, _ = self.policy.sample(zs)
+            _, zsa = self.encoder.state_action(zs, action)
+            Q_policy = self.Q(zsa)
+            policy_loss = (self.alpha*log_prob-Q_policy).mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
+        else:
+            action, pre_activation = self.policy(zs)
+            _, zsa = self.encoder.state_action(zs, action)
+            Q_policy = self.Q(zsa)
+            policy_loss = -Q_policy.mean() + self.pre_activ_weight * pre_activation.pow(2).mean()
+
+        self.policy_optimizer.zero_grad(set_to_none=True)
+        policy_loss.backward()
+        self.policy_optimizer.step()
 
     return Q_val, target_Q
 
@@ -510,7 +552,7 @@ for task in DMC_TASKS:
 
 
 '''
-exploration_type="Standard"
+exploration_type="Bootstrapping"
 
 
 print(f"Running MRQ on {env_name} with env type {env_type} with exploration type {exploration_type} ")

@@ -375,6 +375,18 @@ class QNetwork(nn.Module):
     q = ln_activ(self.l2(q), self.activ)
     q = ln_activ(self.l3(q), self.activ)
     return self.l4(q)
+
+class QEnsemble(nn.Module):
+  def __init__(self, zsa_dim, K=10):
+    super(QEnsemble, self).__init__()
+    self.K = K
+    self.heads = nn.ModuleList([QNetwork(zsa_dim) for _ in range(K)])
+
+  def forward(self, zsa): #not used yet, maybe at evaluation
+    return torch.stack([Q(zsa) for Q in self.heads])
+
+  def head(self, zsa, head_idx):
+    return self.heads[head_idx](zsa)
   
 
 class PolicyNetwork(nn.Module):
