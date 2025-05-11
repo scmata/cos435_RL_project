@@ -129,7 +129,6 @@ class MRQ_agent(object):
 
     # optimise QNetwork
     self.reward_scale = replay_buffer.reward_scale()
-    self.target_reward_scale = self.reward_scale
     Q, Q_tgt = self.train_Q(state, action, next_state, ms_reward,
                             term_discount, self.reward_scale, self.target_reward_scale)
 
@@ -139,6 +138,7 @@ class MRQ_agent(object):
       self.Q1_target.load_state_dict(self.Q.state_dict())
       self.Q2_target.load_state_dict(self.Q.state_dict())
       self.encoder_target.load_state_dict(self.encoder.state_dict())
+      self.target_reward_scale = replay_buffer.reward_scale()
       # TODO: reward scale update
 
       for _ in range(self.encoder_steps):
