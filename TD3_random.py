@@ -1,8 +1,5 @@
 # Imports (after restarting runtime)
 # Note: Most of this code is from the TD3 implementation Sean wrote for Homework 6.
-
-
-
 import gym
 import random
 import numpy as np
@@ -41,8 +38,8 @@ env_type= "DMC" #either DMC or gym
 
 DMC_TASKS = [
     'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
-    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 'dog_run', 'dog_stand', 'dog_trot',
-    'dog_walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
+    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 'dog/run', 'dog/stand', 'dog/trot',
+    'dog/walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
     'hopper/stand', 'humanoid/run', 'humanoid/stand', 'humanoid/walk', 'pendulum/swingup',
     'quadruped/run', 'quadruped/walk', 'reacher/easy', 'reacher/hard',
     'walker/run', 'walker/stand', 'walker/walk'
@@ -72,7 +69,7 @@ def init_flags():
 
     return flags
 
-# The following main() function is provided to you. It can a run for both DDPG and TD3..
+
 def main(policy_name='TD3'):
     args = init_flags()
 
@@ -197,7 +194,6 @@ def main(policy_name='TD3'):
     return evaluations
 
 
-#kiri
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class TD3(object):
@@ -271,7 +267,6 @@ class TD3(object):
 
 			# Compute actor loss
 			actor_loss = - self.critic.Q1(state, self.actor(state)).mean()
-			############################
 
 			# Optimize the actor
 			self.actor_optimizer.zero_grad()
@@ -367,10 +362,10 @@ for task in GYM_TASKS:
     print(f"Running MRQ on {env_name}")
     evaluations_MRQ = main(policy_name='TD3', _env_name=env_name)
 
-    # Replace "/" with "_" in the environment name for safe file indexing
+
     safe_env_name = env_name.replace("/", "_")
 
-    # Plot and save the reward plot
+
     plt.figure()
     plt.plot(evaluations_MRQ)
     plt.xlabel('Episode Num')
@@ -379,7 +374,7 @@ for task in GYM_TASKS:
     plt.savefig(f"plots/reward_plot_{safe_env_name}_MRQ_A.png")
     plt.close()
 
-    # Save evaluations to a DataFrame and then to CSV
+
     df = pd.DataFrame({
         "Episode": range(1, len(evaluations_MRQ) + 1),
         "Reward": evaluations_MRQ

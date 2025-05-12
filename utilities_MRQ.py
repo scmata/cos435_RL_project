@@ -15,17 +15,15 @@ import torch.nn.functional as F
 from typing import Tuple
 from utilities_DMC import flatten_obs
 
-
+#Referenced from MR.Q Github Repo
 def ln_activ(x: torch.Tensor, activ: Callable):
-    #Referenced from MR.Q Github Repo
+    
       x = F.layer_norm(x, (x.shape[-1],))
       return activ(x)
 
 
-
-# We include some optimizations in this buffer to storing states multiple times when history or horizon > 1.
+#Referenced from MR.Q Github Repo
 class ReplayBuffer_MRQ:
-    #Referenced from MR.Q Github Repo
     def __init__(self, obs_shape: tuple[int, ...], action_dim: int, max_action: float, pixel_obs: bool,
         device: torch.device, history: int=1, horizon: int=1, max_size: int=1e6, batch_size: int=256,
         prioritized: bool=True, initial_priority: float=1, normalize_actions: bool=True):
@@ -278,8 +276,8 @@ def eval_policy_MRQ_DMC(policy, env_name, seed, eval_episodes=10):
     print("---------------------------------------")
     return avg_reward
 
-class TwoHot:
-    #Referenced from MR.Q Github Repo
+#Referenced from MR.Q Github Repo
+class TwoHot: 
     def __init__(self, device: torch.device, lower: float=-10, upper: float=10, num_bins: int=101):
         self.bins = torch.linspace(lower, upper, num_bins, device=device)
         self.bins = self.bins.sign() * (self.bins.abs().exp() - 1)
@@ -376,6 +374,7 @@ class QNetwork(nn.Module):
     q = ln_activ(self.l3(q), self.activ)
     return self.l4(q)
 
+#QEnsemble used for bootstrapping for exploration
 class QEnsemble(nn.Module):
   def __init__(self, zsa_dim, K=10):
     super(QEnsemble, self).__init__()
@@ -413,6 +412,7 @@ class PolicyNetwork(nn.Module):
     pre_a = ln_activ(self.l2(a), self.activ)
     return torch.tanh(self.l3(pre_a)), pre_a
 
+#Policy network for stochastic policy
 class StochasticPolicyNetwork(nn.Module):
   """
     Policy network is a three layer MLP hidden dimension 512,

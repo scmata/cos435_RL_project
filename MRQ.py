@@ -23,7 +23,6 @@ from gym import spaces
 import pandas as pd
 from utilities_DMC import DMCWrapper, make_dmc_env, flatten_obs
 
-# from utilities_MRQ import ReplayBuffer_MRQ, Encoder, PolicyNetwork, QNetwork, TwoHot, eval_policy_MRQ_DMC, eval_policy_MRQ_gym, StochasticPolicyNetwork
 from utilities_MRQ import *
 import argparse
 
@@ -36,12 +35,6 @@ print(f" Current numpy version: {np.__version__}, gym version: {gym.__version__}
 env_name='MountainCarContinuous'
 env_type= "gym" #either DMC or gym
 
-
-#
-
-#'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
-#    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 
-
 DMC_TASKS = [
     'dog/run', 'dog/stand', 'dog/trot',
     'dog/walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
@@ -49,10 +42,6 @@ DMC_TASKS = [
     'quadruped/run', 'quadruped/walk', 'reacher/easy', 'reacher/hard',
     'walker/run', 'walker/stand', 'walker/walk'
 ]
-
-
-
-
 
 
 #env_name = 'BipedalWalker-v3'
@@ -140,7 +129,6 @@ class MRQ_agent(object):
   def train(self, replay_buffer, batch_size=64):
     self.total_it += 1
 
-    # TODO: random exploration
     if replay_buffer.size <= self.random_exploration_steps:
       return
 
@@ -164,8 +152,6 @@ class MRQ_agent(object):
       self.Q1_target.load_state_dict(self.Q.state_dict())
       self.Q2_target.load_state_dict(self.Q.state_dict())
       self.encoder_target.load_state_dict(self.encoder.state_dict())
-      #self.target_reward_scale = replay_buffer.reward_scale()
-      # TODO: reward scale update
 
       for _ in range(self.encoder_steps):
         state, action, next_state, reward, not_done = replay_buffer.sample(horizon=self.encoder_horizon, include_intermediate=True)
@@ -283,7 +269,7 @@ def init_flags():
   flags = {
         "env": env_name,
         "seed":0 ,
-        "start_timesteps": 1e4, #needs to be 100k at some point
+        "start_timesteps": 1e4,
         "max_timesteps": 8e4,
         "expl_noise": 0.1,
         "batch_size": 256,
@@ -297,14 +283,14 @@ def init_flags():
   return flags
 
 
-
+#plotting the exploration of MRQ (Note this is only meant to be used for the MountainCarContinuous environment)
 def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration_type='Standard'):
     timesteps = range(len(actions))
     
-    # Create a figure with 2 subplots (one for actions, one for states)
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
+    #3 subplots: action exploration over time, state space diagram of states and state[0] over time
+    # goal is x > 0.45
 
-    # --- Plot Actions ---
     axs[0].plot(timesteps, actions, label='Action value', alpha=0.7)
     axs[0].axvline(x=start_timesteps, color='red', linestyle='--', label='End of Random Exploration')
     axs[0].set_title('Action Exploration Over Time')
@@ -314,7 +300,6 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration
     axs[0].grid(True)
     axs[0].set_xlim([0, max_timesteps])
 
-    # --- Plot States Before 1000 Timesteps ---
     scatter_before = axs[1].scatter(
         [s[0] for i, s in enumerate(states) if i < start_timesteps], 
         [s[1] for i, s in enumerate(states) if i < start_timesteps], 
@@ -326,7 +311,6 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration
     cbar_before = plt.colorbar(scatter_before, ax=axs[1])
     cbar_before.set_label('Timestep (Before 1000)')
     
-    # --- Plot States After 1000 Timesteps ---
     scatter_after = axs[1].scatter(
         [s[0] for i, s in enumerate(states) if i >= start_timesteps], 
         [s[1] for i, s in enumerate(states) if i >= start_timesteps], 
@@ -338,7 +322,7 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration
     cbar_after = plt.colorbar(scatter_after, ax=axs[1])
     cbar_after.set_label('Timestep (After 1000)')
 
-    axs[1].axvline(x=states[int(start_timesteps)][0], color='red', linestyle='--', label='End of Random Exploration (State)')
+   
     axs[1].set_title('State Exploration Over Time (2D State Plot)')
     axs[1].set_xlabel('State Dimension 1 (e.g., state[0])')
     axs[1].set_ylabel('State Dimension 2 (e.g., state[1])')
@@ -347,7 +331,6 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration
     axs[1].set_xlim([min(s[0] for s in states), max(s[0] for s in states)])
     axs[1].set_ylim([min(s[1] for s in states), max(s[1] for s in states)])
 
-    # --- Plot State[0] Over Time ---
     axs[2].plot(timesteps, [s[0] for s in states], label='State[0] over time', color='orange', alpha=0.7)
     axs[2].set_title('State[0] Over Time')
     axs[2].set_xlabel('Timestep')
@@ -356,8 +339,6 @@ def plot_exploration(actions, states, start_timesteps, max_timesteps,exploration
     axs[2].grid(True)
     axs[2].set_xlim([0, max_timesteps])
 
-
-    # Show the plots
     plt.tight_layout()
     plt.savefig(f"plots/reward_plot_MountainCarContinuous_MRQ_{exploration_type}_SA.png")
     plt.close()
@@ -404,7 +385,7 @@ def main(policy_name='MRQ',_env_name=env_name, exploration='Standard'):
 
     elif env_type == "gym":
         env = gym.make(_env_name)
-        env.seed(args["seed"] + 100)
+        env.seed(args["seed"])
         env.action_space.seed(args["seed"])
         torch.manual_seed(args["seed"])
         np.random.seed(args["seed"])
@@ -473,7 +454,7 @@ def main(policy_name='MRQ',_env_name=env_name, exploration='Standard'):
             reward = time_step.reward or 0.0
             done = time_step.last()
             done_bool = float(done)
-            #need to get the truncated value
+
             truncated = 0.0  # DMC environments do not have a truncated flag
         elif env_type == "gym":
             next_state, reward, done, truncated = env.step(action)
@@ -507,16 +488,11 @@ def main(policy_name='MRQ',_env_name=env_name, exploration='Standard'):
             episode_timesteps = 0
             episode_num += 1
 
-    # goal is x > 0.45
-    # 
-
-
     if args["env"] == "MountainCarContinuous":
         plot_exploration(visited_actions, visited_states, args["start_timesteps"], args["max_timesteps"],exploration_type=exploration)
     return evaluations
 
-
-# Create the plots directory if it doesn't exist
+#create relevant directories if they don't exist
 if not os.path.exists("plots"):
     os.makedirs("plots")
 
@@ -560,7 +536,8 @@ print(f"Running MRQ on {env_name} with env type {env_type} with exploration type
 
 
 evaluations_MRQ = main(policy_name = 'MRQ', _env_name=env_name, exploration=exploration_type)
-# Replace "/" with "_" in the environment name for safe file indexing
+
+#"/" messes up file indexing, so we replace it with "_"
 safe_env_name = env_name.replace("/", "_")
 
 plt.plot(evaluations_MRQ)
@@ -569,14 +546,10 @@ plt.ylabel('reward')
 plt.title(f"MRQ {safe_env_name} reward plot")
 plt.savefig(f"plots/reward_plot_{safe_env_name}_{env_type}_explore{exploration_type}_MRQ_FinalABC_no_rewardScale.png")
 
-# Save evaluations to a DataFrame and then to CSV
-
-# Create a DataFrame from the evaluations
+# save evaluations
 df = pd.DataFrame({
     "Episode": range(1, len(evaluations_MRQ) + 1),
     "Reward": evaluations_MRQ
 })
-
-# Save the DataFrame to a CSV file
 df.to_csv(f"results/{safe_env_name}_{env_type}_explore{exploration_type}_evaluationsMRQ_Final_noRewardScale.csv", index=False)
 

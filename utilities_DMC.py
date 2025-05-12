@@ -2,21 +2,18 @@ from dm_control import suite
 from dm_env import specs
 import numpy as np
 
-
+#This wrapper was written using the MR Q code as a reference
+#Referenced from MR.Q Github Repo
 class DMCWrapper:
     def __init__(self, domain_name, task_name, frame_skip=2, seed=42):
         self.env = suite.load(domain_name=domain_name, task_name=task_name, task_kwargs={'random': seed})
         self.frame_skip = frame_skip
         self._reset()
 
-        # Define action and observation spaces
         self.action_spec = self.env.action_spec()
         self.obs_spec = self.env.observation_spec()
         self.observation_size = sum(np.prod(v.shape) for v in self.obs_spec.values())
         self.action_size = np.prod(self.action_spec.shape)
-
-    def _flatten_obs(self, obs_dict):
-        return np.concatenate([v.ravel() for v in obs_dict.values()])
 
     def _reset(self):
         self.time_step = self.env.reset()
