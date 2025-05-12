@@ -9,7 +9,6 @@ class DMCWrapper:
         self.frame_skip = frame_skip
         self._reset()
 
-        # Define action and observation spaces
         self.action_spec = self.env.action_spec()
         self.obs_spec = self.env.observation_spec()
         self.observation_size = sum(np.prod(v.shape) for v in self.obs_spec.values())

@@ -51,6 +51,9 @@ GYM_TASKS = [
      'Ant-v4', 'HalfCheetah-v4', 'Hopper-v4', 'humanoid-v4', 'Walker2d-v4'
 ]
 
+#GYM_TASKS = ['MountainCarContinuous']
+
+GYM_TASKS = ['Ant-v4', 'HalfCheetah-v4', 'Humanoid-v4']
 
 
 #env_name = 'BipedalWalker-v3'
@@ -403,7 +406,7 @@ for task in GYM_TASKS:
     plt.xlabel('Episode Num')
     plt.ylabel('Reward')
     plt.title(f"MRQ {safe_env_name} Reward Plot")
-    plt.savefig(f"plots/reward_plot_{safe_env_name}_{env_type}_MRQ_B.png")
+    plt.savefig(f"plots/MRQ/reward_plot_{safe_env_name}_{env_type}_MRQ_B.png")
     plt.close()
 
     # Save evaluations to a DataFrame and then to CSV
@@ -411,7 +414,7 @@ for task in GYM_TASKS:
         "Episode": range(1, len(evaluations_MRQ) + 1),
         "Reward": evaluations_MRQ
     })
-    df.to_csv(f"results/{safe_env_name}_{env_type}_evaluations_MRQ_B.csv", index=False)
+    df.to_csv(f"results/MRQ/{safe_env_name}_{env_type}_evaluations_MRQ_B.csv", index=False)
 
 
 '''

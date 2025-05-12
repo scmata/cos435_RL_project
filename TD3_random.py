@@ -39,17 +39,24 @@ env_type= "DMC" #either DMC or gym
 #otherwise it's Ant-v4, or MountainCarContinuous
 
 
+#DMC_TASKS = [
+#    'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
+#    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 'dog_run', 'dog_stand', 'dog_trot',
+#    'dog_walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
+#    'hopper/stand', 'humanoid/run', 'humanoid/stand', 'humanoid/walk', 'pendulum/swingup',
+#    'quadruped/run', 'quadruped/walk', 'reacher/easy', 'reacher/hard',
+#    'walker/run', 'walker/stand', 'walker/walk'
+#]
+
+
 DMC_TASKS = [
-    'acrobot/swingup', 'ball_in_cup/catch', 'cartpole/balance', 'cartpole/balance_sparse',
-    'cartpole/swingup', 'cartpole/swingup_sparse', 'cheetah/run', 'dog_run', 'dog_stand', 'dog_trot',
-    'dog_walk', 'finger/spin', 'finger/turn_easy', 'finger/turn_hard', 'fish/swim', 'hopper/hop',
-    'hopper/stand', 'humanoid/run', 'humanoid/stand', 'humanoid/walk', 'pendulum/swingup',
-    'quadruped/run', 'quadruped/walk', 'reacher/easy', 'reacher/hard',
-    'walker/run', 'walker/stand', 'walker/walk'
+    'dog/run', 'dog/stand', 'dog/trot'
 ]
 
 GYM_TASKS = [
-     'Ant-v3', 'HalfCheetah-v3', 'Hopper-v3', 'humanoid-v2', 'Walker2d-v3'
+    'Ant-v4',
+    'Humanoid-v4',
+    'Walker2d-v4'
 ]
 
 
@@ -73,11 +80,11 @@ def init_flags():
     return flags
 
 # The following main() function is provided to you. It can a run for both DDPG and TD3..
-def main(policy_name='TD3'):
+def main(policy_name='TD3', _env_name=None):
     args = init_flags()
 
     if env_type == "DMC":
-        domain, task = args["env"].split("/")
+        domain, task = _env_name.split("/")
         env, action_spec = make_dmc_env(domain, task, args["seed"])
 
         # Set seeds
@@ -87,11 +94,12 @@ def main(policy_name='TD3'):
         time_step = env.reset()
         state = flatten_obs(time_step.observation)
         state_dim = state.shape[0]
+
         action_dim = action_spec.shape[0]
         max_action = action_spec.maximum[0]
 
     elif env_type == "gym":
-        env = gym.make(args["env"])
+        env = gym.make(_env_name)
         env.seed(args["seed"] + 100)
         env.action_space.seed(args["seed"])
         torch.manual_seed(args["seed"])
@@ -120,9 +128,9 @@ def main(policy_name='TD3'):
     replay_buffer = ReplayBuffer_TD3(state_dim, action_dim)
 
     if env_type == "DMC":
-        evaluations = [eval_policy_TD3_DMC(policy, args["env"], args["seed"])]
+        evaluations = [eval_policy_TD3_DMC(policy, _env_name, args["seed"])]
     elif env_type == "gym":
-        evaluations = [eval_policy_TD3_gym(policy, args["env"], args["seed"])]
+        evaluations = [eval_policy_TD3_gym(policy, _env_name, args["seed"])]
         state, done = env.reset(), False
 
     episode_reward = 0
@@ -330,7 +338,7 @@ class RandomPolicy(object):
 	def train(self, replay_buffer, batch_size=256):
 		pass
      
-
+'''
 
 evaluations_random = main(policy_name = 'RandomPolicy') #either TD3 or RandomPolicy
 evaluations_td3 = main(policy_name = 'TD3') #either TD3 or RandomPolicy
@@ -358,3 +366,32 @@ df = pd.DataFrame({
 
 # Save the DataFrame to a CSV file
 df.to_csv(f"results/{env_name.replace('/', '_')}_evaluationsTD3.csv", index=False)
+
+
+'''
+
+
+env_type = "DMC" #either DMC or gym
+for task in DMC_TASKS:
+    env_name = task
+    print(f"Running TD3  on {env_name}")
+    evaluations_MRQ = main(policy_name='TD3', _env_name=env_name)
+
+    # Replace "/" with "_" in the environment name for safe file indexing
+    safe_env_name = env_name.replace("/", "_")
+
+    # Plot and save the reward plot
+    plt.figure()
+    plt.plot(evaluations_MRQ)
+    plt.xlabel('Episode Num')
+    plt.ylabel('Reward')
+    plt.title(f"MRQ {safe_env_name} Reward Plot")
+    plt.savefig(f"plots/TD3/reward_plot_{safe_env_name}_MRQ_TD3_A.png")
+    plt.close()
+
+    # Save evaluations to a DataFrame and then to CSV
+    df = pd.DataFrame({
+        "Episode": range(1, len(evaluations_MRQ) + 1),
+        "Reward": evaluations_MRQ
+    })
+    df.to_csv(f"results/TD3/{safe_env_name}_evaluations_MRQ_TD3_A.csv", index=False)
